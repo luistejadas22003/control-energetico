@@ -205,9 +205,6 @@
         let fanMode = 'auto';
         const historyLength = 15;
 
-        // Configura aquí la IP fija de tu ESP32 o déjala dinámica según dónde se cargue la web
-        const ESP32_IP = "192.168.1.50"; 
-
         function toggleTheme() {
             const html = document.documentElement;
             const icon = document.getElementById('theme-icon');
@@ -241,7 +238,9 @@
         });
 
         function initWebSocket() {
-            ws = new WebSocket("ws://" + ESP32_IP + ":81/");
+            // Detecta automáticamente el host actual o recurre a esp32.local[cite: 1]
+            const host = window.location.hostname || "esp32.local";
+            ws = new WebSocket("ws://" + host + ":81/");
 
             ws.onopen = function() {
                 document.getElementById('status-pill').className = "status-pill connected";
@@ -298,12 +297,12 @@
         }
 
         function toggleBatteryRelay() { if(ws?.readyState === WebSocket.OPEN) ws.send("TOGGLE_BAT"); }
-        function toggleFanRelayManual() { if(fanMode === 'manual' && ws?.readyState === WebSocket.OPEN) ws.send("TOGGLE_FAN"); }
+        function toggleFanRelayManual() { if(fanMode === 'manual' && ws?.readyState ===WebSocket.OPEN) ws.send("TOGGLE_FAN"); }
         function setFanMode(mode) {
             fanMode = mode.toLowerCase();
             if(ws?.readyState === WebSocket.OPEN) ws.send("MODE:" + mode.toUpperCase());
             document.getElementById('btn-mode-auto').className = fanMode === 'auto' ? 'segmented-btn active' : 'segmented-btn';
-            document.getElementById('btn-mode-manual').className = fanMode === 'manual' ? 'segmented-btn active' : 'segmented-btn';
+            document.getElementById('btn-mode-manual', '').className = fanMode === 'manual' ? 'segmented-btn active' : 'segmented-btn';
             document.getElementById('btn-toggle-fan').disabled = (fanMode === 'auto');
         }
         function updateSettings() {
