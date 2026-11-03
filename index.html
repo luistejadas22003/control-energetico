@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 SCADA - MQTT Telemetría Energética</title>
+    <title>ESP32 SCADA - Telemetría Energética & Control Térmico</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=JetBrains+Mono:wght@600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Librería Paho MQTT para WebSockets en el navegador -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+    <!-- Librería MQTT estándar compatible con WSS (GitHub Pages) -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
     <style>
         [data-theme="dark"] {
@@ -200,15 +200,17 @@
     </div>
 
     <script>
-        let mqttClient;
+        const topicStatus = 'esp32_energia/status';
+        const topicCmd = 'esp32_energia/cmd';
+
+        // Conexión WSS segura requerida para GitHub Pages
+        const client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+
         let isGridPowerActive = true;
         let isBatteryRelayActive = false;
         let isFanRelayActive = false;
         let fanMode = 'auto';
         const historyLength = 15;
-
-        const TOPIC_STATUS = "esp32_energia/status";
-        const TOPIC_CMD = "esp32_energia/cmd";
 
         function toggleTheme() {
             const html = document.documentElement;
@@ -242,40 +244,28 @@
             options: { responsive: true, maintainAspectRatio: false }
         });
 
-        function initMQTT() {
-            mqttClient = new Paho.MQTT.Client("broker.hivemq.com", 8000, "SCADA_Web_" + parseInt(Math.random() * 100000));
+        client.on('connect', () => {
+            document.getElementById('status-pill').className = "status-pill connected";
+            document.getElementById('ws-status-text').innerText = "CONECTADO";
+            client.subscribe(topicStatus);
+        });
 
-            mqttClient.onConnectionLost = function(responseObject) {
-                document.getElementById('status-pill').className = "status-pill";
-                document.getElementById('ws-status-text').innerText = "DESCONECTADO";
-                setTimeout(initMQTT, 4000);
-            };
+        client.on('error', (err) => {
+            document.getElementById('status-pill').className = "status-pill";
+            document.getElementById('ws-status-text').innerText = "ERROR CONEXIÓN";
+            console.error(err);
+        });
 
-            mqttClient.onMessageArrived = function(message) {
-                if (message.destinationName === TOPIC_STATUS) {
-                    try {
-                        const data = JSON.parse(message.payloadString);
-                        processRealData(data);
-                    } catch(e) {
-                        console.error("Error al parsear JSON:", e);
-                    }
+        client.on('message', (topic, message) => {
+            if (topic === topicStatus) {
+                try {
+                    const data = JSON.parse(message.toString());
+                    processRealData(data);
+                } catch(e) {
+                    console.error("Error al parsear JSON:", e);
                 }
-            };
-
-            mqttClient.connect({
-                onSuccess: function() {
-                    document.getElementById('status-pill').className = "status-pill connected";
-                    document.getElementById('ws-status-text').innerText = "CONECTADO";
-                    mqttClient.subscribe(TOPIC_STATUS);
-                },
-                onFailure: function() {
-                    document.getElementById('status-pill').className = "status-pill";
-                    document.getElementById('ws-status-text').innerText = "ERROR CONEXIÓN";
-                    setTimeout(initMQTT, 4000);
-                },
-                useSSL: false
-            });
-        }
+            }
+        });
 
         function processRealData(data) {
             isGridPowerActive = data.grid;
@@ -314,20 +304,17 @@
             chartClimate.update();
         }
 
-        function sendMQTTCommand(cmd) {
-            if (mqttClient && mqttClient.isConnected()) {
-                message = new Paho.MQTT.Message(cmd);
-                message.destinationName = TOPIC_CMD;
-                mqttClient.send(message);
-            }
+        function toggleBatteryRelay() {
+            client.publish(topicCmd, "TOGGLE_BAT");
         }
 
-        function toggleBatteryRelay() { sendMQTTCommand("TOGGLE_BAT"); }
-        function toggleFanRelayManual() { if(fanMode === 'manual') sendMQTTCommand("TOGGLE_FAN"); }
-        
+        function toggleFanRelayManual() {
+            if(fanMode === 'manual') client.publish(topicCmd, "TOGGLE_FAN");
+        }
+
         function setFanMode(mode) {
             fanMode = mode.toLowerCase();
-            sendMQTTCommand("MODE:" + mode.toUpperCase());
+            client.publish(topicCmd, "MODE:" + mode.toUpperCase());
             document.getElementById('btn-mode-auto').className = fanMode === 'auto' ? 'segmented-btn active' : 'segmented-btn';
             document.getElementById('btn-mode-manual').className = fanMode === 'manual' ? 'segmented-btn active' : 'segmented-btn';
             document.getElementById('btn-toggle-fan').disabled = (fanMode === 'auto');
@@ -335,7 +322,7 @@
 
         function updateSettings() {
             const val = parseFloat(document.getElementById('temp-limit').value);
-            if(!isNaN(val)) sendMQTTCommand("SET_TEMP:" + val);
+            if(!isNaN(val)) client.publish(topicCmd, "SET_TEMP:" + val);
         }
 
         function updateBatteryRelayUI() {
@@ -390,8 +377,6 @@
                 nodeSource.className = "circle-node node-source"; iconSource.className = "fa-solid fa-tower-cell";
             }
         }
-
-        window.onload = initMQTT;
     </script>
 </body>
 </html>
