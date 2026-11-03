@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 SCADA - MQTT Telemetría Energética & Control Térmico</title>
+    <title>ESP32 SCADA - MQTT Telemetría Energética</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=JetBrains+Mono:wght@600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -207,7 +207,6 @@
         let fanMode = 'auto';
         const historyLength = 15;
 
-        // Configuración de tópicos MQTT (deben coincidir con el ESP32)
         const TOPIC_STATUS = "esp32_energia/status";
         const TOPIC_CMD = "esp32_energia/cmd";
 
@@ -244,13 +243,12 @@
         });
 
         function initMQTT() {
-            // Conexión mediante WebSocket al broker público HiveMQ (Puerto WS predeterminado: 8000)
             mqttClient = new Paho.MQTT.Client("broker.hivemq.com", 8000, "SCADA_Web_" + parseInt(Math.random() * 100000));
 
             mqttClient.onConnectionLost = function(responseObject) {
                 document.getElementById('status-pill').className = "status-pill";
                 document.getElementById('ws-status-text').innerText = "DESCONECTADO";
-                setTimeout(initMQTT, 4000); // Reintentar reconexión
+                setTimeout(initMQTT, 4000);
             };
 
             mqttClient.onMessageArrived = function(message) {
@@ -259,7 +257,7 @@
                         const data = JSON.parse(message.payloadString);
                         processRealData(data);
                     } catch(e) {
-                        console.error("Error al parsear JSON recibido:", e);
+                        console.error("Error al parsear JSON:", e);
                     }
                 }
             };
@@ -270,12 +268,12 @@
                     document.getElementById('ws-status-text').innerText = "CONECTADO";
                     mqttClient.subscribe(TOPIC_STATUS);
                 },
-                onFailure: function(message) {
+                onFailure: function() {
                     document.getElementById('status-pill').className = "status-pill";
                     document.getElementById('ws-status-text').innerText = "ERROR CONEXIÓN";
                     setTimeout(initMQTT, 4000);
                 },
-                useSSL: false // Cambiar a true si usas wss://
+                useSSL: false
             });
         }
 
@@ -316,7 +314,6 @@
             chartClimate.update();
         }
 
-        // Funciones para enviar comandos vía MQTT
         function sendMQTTCommand(cmd) {
             if (mqttClient && mqttClient.isConnected()) {
                 message = new Paho.MQTT.Message(cmd);
